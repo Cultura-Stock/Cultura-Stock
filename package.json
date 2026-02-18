@@ -6,8 +6,13 @@
     "react-dom": "^18.2.0",
     "xlsx": "^0.18.5"
   },
+  "devDependencies": {
+    "vite": "^4.4.0",
+    "@vitejs/plugin-react": "^4.0.0"
+  },
   "scripts": {
-    "build": "react-scripts build",
-    "start": "react-scripts start"
+    "dev": "vite",
+    "build": "vite build",
+    "start": "vite"
   }
 }
