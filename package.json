@@ -6,7 +6,7 @@
     "react-dom": "^18.2.0",
     "xlsx": "^0.18.5",
     "@zxing/browser": "^0.1.4",
-    "@zxing/library": "^0.19.2"
+    "@zxing/library": "^0.21.0"
   },
   "devDependencies": {
     "vite": "^4.4.0",
