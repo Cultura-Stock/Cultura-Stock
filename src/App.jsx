@@ -1,5 +1,6 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import * as XLSX from "xlsx";
+import { BrowserMultiFormatReader } from "@zxing/browser";
 
 const INIT_PRODUCTS = [
   { ean: "3017620422003", name: "Nutella 400g",         category: "Alimentaire", stock: 48,  unit: "pcs" },
@@ -37,9 +38,9 @@ const D = {
   check:   "M20 6L9 17l-5-5",
   x:       "M18 6L6 18M6 6l12 12",
   upload:  "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12",
+  camera:  "M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2zM12 17a4 4 0 1 0 0-8 4 4 0 0 0 0 8z",
 };
 
-// Palette Cultura : bleu marine + blanc uniquement
 const C = {
   navy:    "#1a2b6b",
   navyD:   "#14205a",
@@ -61,12 +62,8 @@ const CSS = `
   ::-webkit-scrollbar-thumb { background: #c5cadf; border-radius: 10px; }
   input, button { font-family: 'Nunito', sans-serif; }
 
-  /* Boutons */
   .btn-main { background:linear-gradient(135deg,#1a2b6b,#2540a0); color:white; border:none; border-radius:12px; padding:10px 20px; font-weight:700; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:7px; transition:all .2s; box-shadow:0 4px 14px rgba(26,43,107,.3); }
   .btn-main:hover { transform:translateY(-2px); box-shadow:0 7px 22px rgba(26,43,107,.42); }
-
-  .btn-white { background:white; color:#1a2b6b; border:2px solid white; border-radius:12px; padding:10px 20px; font-weight:800; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:7px; transition:all .2s; box-shadow:0 4px 14px rgba(255,255,255,.25); }
-  .btn-white:hover { background:#eef0f9; transform:translateY(-2px); }
 
   .btn-outline { background:white; color:#1a2b6b; border:2px solid #dde0ee; border-radius:10px; padding:8px 16px; font-weight:700; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all .15s; }
   .btn-outline:hover { border-color:#1a2b6b; background:#eef0f9; }
@@ -75,47 +72,38 @@ const CSS = `
   .btn-danger { background:white; border:1.5px solid #fcd4d0; border-radius:8px; color:#e74c3c; cursor:pointer; padding:6px 9px; display:flex; align-items:center; transition:all .15s; }
   .btn-danger:hover { background:#fdecea; border-color:#e74c3c; }
 
-  /* Champs */
+  .btn-scan { background:linear-gradient(135deg,#1a2b6b,#2540a0); color:white; border:none; border-radius:10px; padding:8px 16px; font-weight:700; font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; transition:all .2s; }
+  .btn-scan:hover { transform:translateY(-1px); box-shadow:0 4px 14px rgba(26,43,107,.3); }
+  .btn-scan.active { background:linear-gradient(135deg,#e74c3c,#c0392b); box-shadow:0 4px 14px rgba(231,76,60,.3); }
+
   .field { background:white; border:2px solid #dde0ee; color:#1a2b6b; border-radius:12px; padding:11px 16px; font-size:14px; font-weight:600; outline:none; transition:all .15s; width:100%; }
   .field:focus { border-color:#1a2b6b; box-shadow:0 0 0 3px rgba(26,43,107,.1); }
   .field::placeholder { color:#c5cadf; font-weight:500; }
   .field-sm { padding:7px 12px; font-size:13px; border-radius:9px; }
 
-  /* Carte */
   .card { background:white; border-radius:16px; box-shadow:0 2px 14px rgba(26,43,107,.07); border:1.5px solid #eaecf5; }
 
-  /* Badges */
   .bdg { font-size:11px; font-weight:800; padding:3px 9px; border-radius:20px; letter-spacing:.04em; }
   .b-navy  { background:#eef0f9; color:#1a2b6b; }
   .b-green { background:#e6f9ee; color:#1a7a3e; }
-  .b-white { background:rgba(255,255,255,.2); color:white; border:1px solid rgba(255,255,255,.4); }
   .b-red   { background:#fdecea; color:#c0392b; }
 
-  /* Animations */
   .anim { animation:aup .22s ease; }
   @keyframes aup { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
 
-  /* Notification */
   .notif-box { position:fixed; top:20px; right:20px; z-index:9999; background:white; border-radius:14px; padding:13px 20px; font-size:14px; font-weight:700; display:flex; align-items:center; gap:10px; box-shadow:0 8px 30px rgba(26,43,107,.18); animation:aup .3s ease; max-width:340px; border-left:4px solid; }
   .n-ok  { border-color:#27ae60; color:#1a7a3e; }
   .n-err { border-color:#e74c3c; color:#c0392b; }
 
-  /* Grille adresses */
   .addr-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(82px,1fr)); gap:8px; }
   .addr-cell { background:white; border:2px solid #dde0ee; border-radius:10px; padding:10px 6px; text-align:center; cursor:pointer; transition:all .15s; font-size:12px; font-weight:800; color:#8b92b8; }
   .addr-cell:hover  { border-color:#1a2b6b; color:#1a2b6b; transform:translateY(-1px); box-shadow:0 4px 12px rgba(26,43,107,.12); }
   .addr-cell.filled { border-color:#1a2b6b; color:#1a2b6b; background:#eef0f9; }
   .addr-cell.sel    { background:#1a2b6b; color:white; border-color:#1a2b6b; box-shadow:0 4px 14px rgba(26,43,107,.35); transform:scale(1.05); }
 
-  /* Tableau */
   .trow { transition:background .1s; }
   .trow:hover { background:#f7f8fd; }
 
-  /* Pulse scan */
-  .pulse { animation:pls 1s ease-in-out infinite; }
-  @keyframes pls { 0%,100%{box-shadow:0 0 0 0 rgba(26,43,107,.4)} 50%{box-shadow:0 0 0 7px rgba(26,43,107,0)} }
-
-  /* Quantités */
   .qty-btn-minus { background:#eef0f9; border:none; border-radius:6px; width:26px; height:26px; cursor:pointer; font-weight:900; font-size:16px; color:#1a2b6b; display:flex; align-items:center; justify-content:center; transition:background .1s; }
   .qty-btn-minus:hover { background:#dde0ee; }
   .qty-btn-plus  { background:#1a2b6b; border:none; border-radius:6px; width:26px; height:26px; cursor:pointer; font-weight:900; font-size:16px; color:white; display:flex; align-items:center; justify-content:center; transition:background .1s; }
@@ -123,13 +111,86 @@ const CSS = `
   .qty-input { width:64px; background:#f7f8fd; border:2px solid #dde0ee; border-radius:8px; padding:5px 8px; font-size:13px; font-weight:700; color:#1a2b6b; outline:none; text-align:center; font-family:'Nunito',sans-serif; transition:border-color .15s; }
   .qty-input:focus { border-color:#1a2b6b; }
 
-  /* Modal */
   .modal-bg { position:fixed; inset:0; background:rgba(10,15,40,.5); display:flex; align-items:center; justify-content:center; z-index:500; animation:fadeIn .2s ease; }
   @keyframes fadeIn { from{opacity:0} to{opacity:1} }
   .modal { background:white; border-radius:20px; padding:28px; width:560px; max-width:95vw; max-height:85vh; overflow-y:auto; box-shadow:0 20px 60px rgba(10,15,40,.3); animation:aup .25s ease; }
   .drop-zone { border:2.5px dashed #c5cadf; border-radius:14px; padding:32px 20px; text-align:center; cursor:pointer; transition:all .2s; }
   .drop-zone:hover, .drop-zone.over { border-color:#1a2b6b; background:#eef0f9; }
+
+  /* Scanner caméra */
+  .scanner-modal { position:fixed; inset:0; background:rgba(0,0,0,.92); z-index:1000; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .scanner-video { width:100%; max-width:400px; border-radius:16px; overflow:hidden; position:relative; }
+  .scanner-video video { width:100%; display:block; border-radius:16px; }
+  .scanner-line { position:absolute; left:10%; right:10%; height:3px; background:linear-gradient(90deg,transparent,#1a2b6b,transparent); animation:scanline 2s ease-in-out infinite; top:50%; }
+  @keyframes scanline { 0%,100%{top:20%} 50%{top:80%} }
+  .scanner-frame { position:absolute; inset:0; pointer-events:none; }
+  .scanner-corner { position:absolute; width:24px; height:24px; border-color:#1a2b6b; border-style:solid; }
+  .sc-tl { top:8%; left:8%; border-width:3px 0 0 3px; border-radius:4px 0 0 0; }
+  .sc-tr { top:8%; right:8%; border-width:3px 3px 0 0; border-radius:0 4px 0 0; }
+  .sc-bl { bottom:8%; left:8%; border-width:0 0 3px 3px; border-radius:0 0 0 4px; }
+  .sc-br { bottom:8%; right:8%; border-width:0 3px 3px 0; border-radius:0 0 4px 0; }
 `;
+
+// ── Scanner Caméra ────────────────────────────────────────────────────────────
+function CameraScanner({ onScan, onClose }) {
+  const videoRef = useRef(null);
+  const readerRef = useRef(null);
+  const [error, setError] = useState(null);
+  const [scanning, setScanning] = useState(true);
+
+  useEffect(() => {
+    let active = true;
+    const reader = new BrowserMultiFormatReader();
+    readerRef.current = reader;
+
+    reader.decodeFromVideoDevice(null, videoRef.current, (result, err) => {
+      if (!active) return;
+      if (result) {
+        setScanning(false);
+        active = false;
+        onScan(result.getText());
+      }
+    }).catch(e => {
+      setError("Impossible d'accéder à la caméra. Vérifiez les permissions.");
+    });
+
+    return () => {
+      active = false;
+      try { reader.reset(); } catch {}
+    };
+  }, [onScan]);
+
+  return (
+    <div className="scanner-modal" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ textAlign:"center", marginBottom:20 }}>
+        <div style={{ color:"white", fontWeight:900, fontSize:18, marginBottom:6 }}>📷 Scanner un code-barres</div>
+        <div style={{ color:"rgba(255,255,255,.6)", fontSize:13 }}>Pointez la caméra vers le code-barres</div>
+      </div>
+
+      {error ? (
+        <div style={{ background:"#fdecea", borderRadius:14, padding:"20px 24px", textAlign:"center", maxWidth:320 }}>
+          <div style={{ color:C.red, fontWeight:700, marginBottom:14 }}>{error}</div>
+          <button className="btn-main" onClick={onClose}>Fermer</button>
+        </div>
+      ) : (
+        <div className="scanner-video">
+          <video ref={videoRef} autoPlay playsInline muted />
+          <div className="scanner-frame">
+            <div className="scanner-corner sc-tl" />
+            <div className="scanner-corner sc-tr" />
+            <div className="scanner-corner sc-bl" />
+            <div className="scanner-corner sc-br" />
+            {scanning && <div className="scanner-line" />}
+          </div>
+        </div>
+      )}
+
+      <button onClick={onClose} style={{ marginTop:24, background:"rgba(255,255,255,.15)", border:"2px solid rgba(255,255,255,.3)", borderRadius:12, padding:"12px 32px", color:"white", fontFamily:"inherit", fontWeight:700, fontSize:15, cursor:"pointer" }}>
+        Annuler
+      </button>
+    </div>
+  );
+}
 
 // ── Parsers Excel ─────────────────────────────────────────────────────────────
 function parseFile(file) {
@@ -217,7 +278,6 @@ function ImportModal({ type, onClose, onDone }) {
           </button>
         </div>
 
-        {/* Format attendu */}
         <div style={{ background:C.light, borderRadius:12, padding:"12px 16px", marginBottom:18, border:`1.5px solid ${C.border}` }}>
           <div style={{ fontWeight:800, fontSize:11, color:C.grey, letterSpacing:".07em", marginBottom:10 }}>FORMAT ATTENDU</div>
           <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
@@ -325,6 +385,7 @@ export default function StockApp() {
   const [addresses, setAddresses] = useState(INIT_ADDRESSES);
   const [notif, setNotif] = useState(null);
   const [importModal, setImportModal] = useState(null);
+  const [scanner, setScanner] = useState(null); // { target: "products"|"addresses", onScan }
 
   const notify = (msg, type = "success") => {
     setNotif({ msg, type });
@@ -357,6 +418,15 @@ export default function StockApp() {
 
   const usedSlots = Object.values(addresses).filter(a => a.products.length>0).length;
 
+  const openScanner = useCallback((onScan) => {
+    setScanner({ onScan });
+  }, []);
+
+  const handleScan = useCallback((ean) => {
+    setScanner(null);
+    if (scanner?.onScan) scanner.onScan(ean);
+  }, [scanner]);
+
   return (
     <div style={{ minHeight:"100vh", background:C.offwhite, fontFamily:"'Nunito','Trebuchet MS',sans-serif", color:C.navy }}>
       <style>{CSS}</style>
@@ -372,31 +442,32 @@ export default function StockApp() {
           onDone={importModal==="products" ? handleImportProducts : handleImportAddresses} />
       )}
 
-      {/* HEADER — bleu marine, texte blanc */}
+      {scanner && (
+        <CameraScanner onScan={handleScan} onClose={() => setScanner(null)} />
+      )}
+
+      {/* HEADER */}
       <header style={{ background:`linear-gradient(135deg,${C.navy},${C.navyD})`, padding:"0 24px", height:64, display:"flex", alignItems:"center", justifyContent:"space-between", boxShadow:"0 4px 22px rgba(26,43,107,.32)", position:"sticky", top:0, zIndex:100 }}>
-        {/* Logo */}
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <div style={{ background:"white", borderRadius:10, width:38, height:38, display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 3px 10px rgba(255,255,255,.2)" }}>
+          <div style={{ background:"white", borderRadius:10, width:38, height:38, display:"flex", alignItems:"center", justifyContent:"center" }}>
             <Ic d={D.barcode} size={20} sw={1.8} style={{ color:C.navy }} />
           </div>
           <div>
             <div style={{ fontWeight:900, fontSize:20, color:"white", letterSpacing:"-.02em", lineHeight:1 }}>
-              cultura<span style={{ opacity:.6 }}>·</span>stock
+              cultura<span style={{ opacity:.5 }}>·</span>stock
             </div>
             <div style={{ fontSize:9, color:"rgba(255,255,255,.5)", letterSpacing:".1em", fontWeight:700, marginTop:2 }}>GESTION D'INVENTAIRE</div>
           </div>
         </div>
 
-        {/* Nav */}
         <nav style={{ display:"flex", gap:6 }}>
           {[["products","Produits",D.pkg],["addresses","Adressage",D.map]].map(([id,label,icon]) => (
-            <button key={id} onClick={()=>setTab(id)} style={{ background:tab===id?"white":"rgba(255,255,255,.12)", color:tab===id?C.navy:"rgba(255,255,255,.85)", border:"none", borderRadius:10, padding:"8px 20px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", gap:7, transition:"all .2s", boxShadow:tab===id?"0 3px 12px rgba(255,255,255,.2)":"none" }}>
+            <button key={id} onClick={()=>setTab(id)} style={{ background:tab===id?"white":"rgba(255,255,255,.12)", color:tab===id?C.navy:"rgba(255,255,255,.85)", border:"none", borderRadius:10, padding:"8px 20px", fontFamily:"inherit", fontWeight:800, fontSize:14, cursor:"pointer", display:"flex", alignItems:"center", gap:7, transition:"all .2s" }}>
               <Ic d={icon} size={16} sw={2} />{label}
             </button>
           ))}
         </nav>
 
-        {/* Actions + compteur */}
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <button onClick={()=>setImportModal(tab)} style={{ background:"rgba(255,255,255,.12)", border:"1.5px solid rgba(255,255,255,.25)", borderRadius:10, padding:"7px 14px", color:"white", fontFamily:"inherit", fontWeight:700, fontSize:12, cursor:"pointer", display:"flex", alignItems:"center", gap:6, transition:"all .15s" }}
             onMouseEnter={e=>e.currentTarget.style.background="rgba(255,255,255,.22)"}
@@ -411,8 +482,8 @@ export default function StockApp() {
 
       <main style={{ padding:"28px 24px", maxWidth:1140, margin:"0 auto" }}>
         {tab==="products"
-          ? <Products products={products} setProducts={setProducts} addresses={addresses} notify={notify} onImport={()=>setImportModal("products")} />
-          : <Addresses products={products} addresses={addresses} setAddresses={setAddresses} notify={notify} onImport={()=>setImportModal("addresses")} />
+          ? <Products products={products} setProducts={setProducts} addresses={addresses} notify={notify} onImport={()=>setImportModal("products")} openScanner={openScanner} />
+          : <Addresses products={products} addresses={addresses} setAddresses={setAddresses} notify={notify} onImport={()=>setImportModal("addresses")} openScanner={openScanner} />
         }
       </main>
     </div>
@@ -420,9 +491,8 @@ export default function StockApp() {
 }
 
 // ── VUE PRODUITS ──────────────────────────────────────────────────────────────
-function Products({ products, setProducts, addresses, notify, onImport }) {
+function Products({ products, setProducts, addresses, notify, onImport, openScanner }) {
   const [q, setQ] = useState("");
-  const [scanning, setScanning] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ ean:"", name:"", category:"", stock:0, unit:"pcs" });
 
@@ -431,9 +501,9 @@ function Products({ products, setProducts, addresses, notify, onImport }) {
 
   const list = products.filter(p => p.ean.includes(q)||p.name.toLowerCase().includes(q.toLowerCase())||p.category.toLowerCase().includes(q.toLowerCase()));
 
-  const scan = () => {
-    setScanning(true); setQ("");
-    setTimeout(()=>{ const p=products[Math.floor(Math.random()*products.length)]; setQ(p.ean); setScanning(false); notify(`Code-barres scanné : ${p.ean}`); }, 1400);
+  const handleScanResult = (ean) => {
+    setQ(ean);
+    notify(`Code scanné : ${ean}`);
   };
 
   const add = () => {
@@ -459,9 +529,7 @@ function Products({ products, setProducts, addresses, notify, onImport }) {
 
       {showForm && (
         <div className="card anim" style={{ padding:20, marginBottom:18, borderColor:C.navy, borderWidth:2 }}>
-          <div style={{ fontWeight:900, fontSize:12, color:C.navy, letterSpacing:".08em", marginBottom:14, display:"flex", alignItems:"center", gap:7 }}>
-            <div style={{ width:7, height:7, background:C.navy, borderRadius:"50%" }} />NOUVEAU PRODUIT
-          </div>
+          <div style={{ fontWeight:900, fontSize:12, color:C.navy, letterSpacing:".08em", marginBottom:14 }}>NOUVEAU PRODUIT</div>
           <div style={{ display:"grid", gridTemplateColumns:"1.5fr 1.5fr 1fr 90px 80px", gap:10, marginBottom:12 }}>
             {[["ean","EAN *"],["name","Désignation *"],["category","Catégorie"],["stock","Stock","number"],["unit","Unité"]].map(([k,ph,t])=>(
               <input key={k} className="field" type={t||"text"} placeholder={ph} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})} />
@@ -479,8 +547,9 @@ function Products({ products, setProducts, addresses, notify, onImport }) {
           <div style={{ position:"absolute", left:14, top:"50%", transform:"translateY(-50%)", color:C.greyL }}><Ic d={D.srch} size={18} sw={2}/></div>
           <input className="field" style={{ paddingLeft:44 }} placeholder="Rechercher par EAN, nom, catégorie…" value={q} onChange={e=>setQ(e.target.value)} />
         </div>
-        <button className="btn-outline" onClick={scan} style={scanning?{borderColor:C.navy,color:C.navy,background:C.light}:{}}>
-          {scanning ? <><div style={{ width:8,height:8,borderRadius:"50%",background:C.navy,display:"inline-block" }} className="pulse"/>Scanning…</> : <><Ic d={D.scan} size={16} sw={2}/>Scanner</>}
+        {/* Bouton scanner caméra */}
+        <button className="btn-scan" onClick={() => openScanner(handleScanResult)}>
+          <Ic d={D.camera} size={16} sw={2}/> Scanner
         </button>
         {q && <button className="btn-outline" style={{ padding:"8px 11px" }} onClick={()=>setQ("")}><Ic d={D.x} size={14} sw={2.5}/></button>}
       </div>
@@ -517,12 +586,11 @@ function Products({ products, setProducts, addresses, notify, onImport }) {
 }
 
 // ── VUE ADRESSAGE ─────────────────────────────────────────────────────────────
-function Addresses({ products, addresses, setAddresses, notify, onImport }) {
+function Addresses({ products, addresses, setAddresses, notify, onImport, openScanner }) {
   const [sel, setSel] = useState(null);
   const [ean, setEan] = useState("");
   const [qty, setQty] = useState(1);
   const [filter, setFilter] = useState("all");
-  const [scanning, setScanning] = useState(false);
 
   const selData = sel ? addresses[sel] : null;
   const keys = Object.keys(addresses);
@@ -536,7 +604,7 @@ function Addresses({ products, addresses, setAddresses, notify, onImport }) {
     if (addresses[sel].products.find(p=>p.ean===ean.trim())) return notify("Produit déjà présent","error");
     setAddresses(prev=>({...prev,[sel]:{...prev[sel],products:[...prev[sel].products,{ean:ean.trim(),qty:Number(qty)||1}]}}));
     setEan(""); setQty(1);
-    notify(`"${prod.name}" ajouté à ${sel} (qté: ${qty})`);
+    notify(`"${prod.name}" ajouté à ${sel}`);
   };
 
   const rmProd = (addr,e) => {
@@ -550,9 +618,9 @@ function Addresses({ products, addresses, setAddresses, notify, onImport }) {
     setAddresses(prev=>({...prev,[addr]:{...prev[addr],products:prev[addr].products.map(p=>p.ean===eanVal?{...p,qty:q}:p)}}));
   };
 
-  const scan = () => {
-    setScanning(true);
-    setTimeout(()=>{ const p=products[Math.floor(Math.random()*products.length)]; setEan(p.ean); setScanning(false); notify(`Scanné : ${p.ean}`); },1200);
+  const handleScanResult = (scannedEan) => {
+    setEan(scannedEan);
+    notify(`Code scanné : ${scannedEan}`);
   };
 
   return (
@@ -571,9 +639,8 @@ function Addresses({ products, addresses, setAddresses, notify, onImport }) {
           </div>
         </div>
 
-        {/* Légende */}
         <div style={{ display:"flex", gap:16, marginBottom:14, fontSize:12, fontWeight:700, color:C.grey }}>
-          {[["#dde0ee","Libre"],["#eef0f9","Occupé (bordure bleue)"],["#1a2b6b","Sélectionné (fond bleu)"]].map(([bgc,l],i)=>(
+          {[["#dde0ee","Libre"],["#eef0f9","Occupé"],["#1a2b6b","Sélectionné"]].map(([bgc,l],i)=>(
             <span key={l} style={{ display:"flex", alignItems:"center", gap:6 }}>
               <span style={{ width:12, height:12, background:bgc, borderRadius:3, display:"inline-block", border:i===1?"2px solid #1a2b6b":"none" }} />{l}
             </span>
@@ -594,7 +661,6 @@ function Addresses({ products, addresses, setAddresses, notify, onImport }) {
         </div>
       </div>
 
-      {/* Panneau droit */}
       <div style={{ position:"sticky", top:84 }}>
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:14 }}>
           <div className="card" style={{ padding:16, textAlign:"center" }}>
@@ -669,8 +735,9 @@ function Addresses({ products, addresses, setAddresses, notify, onImport }) {
                 <button className="btn-main" style={{ flex:1, justifyContent:"center" }} onClick={addProd}>
                   <Ic d={D.plus} size={15} sw={2.5}/>Ajouter
                 </button>
-                <button className="btn-outline" style={{ padding:"8px 12px", ...(scanning?{borderColor:C.navy,color:C.navy,background:C.light}:{}) }} onClick={scan}>
-                  {scanning ? <><div style={{ width:7,height:7,borderRadius:"50%",background:C.navy,display:"inline-block" }} className="pulse"/>Scan</> : <><Ic d={D.scan} size={14} sw={2}/>Scan</>}
+                {/* Bouton scanner caméra */}
+                <button className="btn-scan" onClick={() => openScanner(handleScanResult)}>
+                  <Ic d={D.camera} size={14} sw={2}/>Scan
                 </button>
               </div>
             </div>
@@ -680,3 +747,4 @@ function Addresses({ products, addresses, setAddresses, notify, onImport }) {
     </div>
   );
 }
+
