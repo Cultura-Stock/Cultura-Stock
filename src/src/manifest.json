@@ -1,0 +1,21 @@
+{
+  "name": "Cultura Stock",
+  "short_name": "Cultura Stock",
+  "description": "Gestion de stock Cultura",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1a2b6b",
+  "theme_color": "#1a2b6b",
+  "icons": [
+    {
+      "src": "/src/public/cultura_stock_logo_192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/public/cultura_stock_logo_1024.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}
