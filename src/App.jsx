@@ -7,9 +7,9 @@ const SUPABASE_URL = "https://xzsfzxvhhpmrgnjrtriu.supabase.co";
 const SUPABASE_KEY = "sb_publishable_1GWB1OcUDY2OwXNmKfzbuw_Oxh7G7KD";
 const sb = createClient(SUPABASE_URL, SUPABASE_KEY);
 
-// Toutes les adresses : 110→500 par rangées de 10
+// Toutes les adresses : 100→500 par rangées de 10
 const ALL_ADDRESSES = (() => {
-  const prefixes = [110,120,200,210,220,300,310,320,400,500];
+  const prefixes = [100,110,120,200,210,220,300,310,320,400,500];
   const keys = [];
   prefixes.forEach(p => {
     for(let i=1;i<=99;i++) keys.push(`${p}-${String(i).padStart(2,"0")}`);
